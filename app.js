@@ -7,48 +7,131 @@ function save(){localStorage.setItem(KEY,JSON.stringify(db))}
 function toast(s){$("toast").textContent=s;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2200)}
 function render(){let qs=db[course],p=db.progress[course],studied=Object.values(p).filter(x=>x.attempts).length,wrong=Object.values(p).filter(x=>x.wrong).length,pc=qs.length?Math.round(studied/qs.length*100):0;$("course-title").textContent=course;$("total").textContent=qs.length;$("studied").textContent=studied;$("wrong").textContent=wrong;$("percent").textContent=pc+"%";$("bar").style.width=pc+"%";$("progress-caption").textContent=qs.length?studied+" / "+qs.length+" câu đã luyện":"Bắt đầu học để ghi nhận tiến độ";$("count104").textContent=db.SSG104.length;$("count105").textContent=db.SSG105.length;$("n104").textContent=db.SSG104.length+" câu";$("n105").textContent=db.SSG105.length+" câu";$("bank-course").textContent=course;$("empty").classList.toggle("hidden",!!qs.length);$("bank-list").innerHTML=qs.map((q,i)=>`<div class="bank-row"><div><b>Câu ${i+1}. ${esc(q.question.slice(0,120))}</b><small>${q.options.length} lựa chọn · Đáp án: ${esc(q.answer)}</small></div><button data-del="${i}">×</button></div>`).join("");$("bank-list").classList.toggle("hidden",!qs.length)}
 function parse(raw){
- const lines=raw.replace(/\r/g,"").split("\n").map(line=>line.replace(/\\+\s*$/, "")),result=[];
+ const lines=raw.replace(/\r/g,"").split("\n").map(line=>line.replace(/\\+\s*$/, ""));
+ const result=[];
  let q=[],opts=[],answer="",notes=[],image="",active=-1,last=null;
- let skipImage=false,imageStarted=false;
+ let skipImageBlock=false,imageStarted=false;
+
  const clean=x=>x.replace(/^(?:(?:question|q)\s*)?\d{1,4}\s*[.)、:-]\s*/i,"").trim();
  const norm=x=>String(x||"").toLowerCase().replace(/[^\p{L}\p{N}]+/gu," ").trim();
- const op=/^([A-E])[).、:]\s*(.*)$/i;
- const ans=/^(?:(?:correct\s*)?answer\s*[:：-]\s*)?([A-E]+(?:[\s,;/&]+[A-E]+)*)\s*(?:\((.*)\))?$/i;
+ // Hỗ trợ A., A), A:, A,, A-, A Label và cả a.People.
+ const optionPattern=/^([A-F])(?:\s*[.)、:，,;–—-]\s*|\s+)(\S.*)$/i;
+ const answerPattern=/^(?:correct\s*)?answer\s*[:：-]\s*([A-F](?:[\s,;/&]*[A-F]){0,5})\s*(?:\((.*)\))?$/i;
+ const shortAnswerPattern=/^([A-F](?:[\s,;/&]+[A-F]){0,5}|[A-F]{1,6})\s*(?:\((.*)\))?$/i;
 
  function finish(){
   if(!q.length&&!opts.length)return;
   const question=q.join(" ").replace(/\s+/g," ").trim();
   const keys=opts.map(x=>x.key);
   const valid=!!question&&opts.length>=2&&!!answer&&[...answer].every(k=>keys.includes(k));
-  const item={question,options:opts.map(x=>({...x})),answer,notes:notes.join(" "),image,valid,issue:!question?"Thiếu câu hỏi":opts.length<2?"Thiếu lựa chọn":!answer?"Chưa nhận diện đáp án":"Đáp án không khớp lựa chọn"};
-  result.push(item);last=item;q=[];opts=[];answer="";notes=[];image="";active=-1;
+  const item={
+   question,
+   options:opts.map(x=>({...x})),
+   answer,
+   notes:notes.join(" "),
+   image,
+   valid,
+   issue:!question?"Thiếu câu hỏi":opts.length<2?"Thiếu lựa chọn":!answer?"Chưa nhận diện đáp án":"Đáp án không khớp lựa chọn"
+  };
+  result.push(item);
+  last=item;
+  q=[];opts=[];answer="";notes=[];image="";active=-1;
+ }
+
+ function getAnswer(line){
+  let m=line.match(answerPattern)||line.match(shortAnswerPattern);
+  if(!m)return null;
+  const letters=(m[1].toUpperCase().match(/[A-F]/g)||[]);
+  return {answer:[...new Set(letters)].join(""),note:m[2]||""};
  }
 
  for(const rawLine of lines){
   const line=rawLine.trim();
-  if(!line){if(skipImage&&imageStarted){skipImage=false;imageStarted=false;}continue;}
+  if(!line)continue;
   if(/^(?:star\s+filled|sound)$/i.test(line))continue;
+
+  // Image thường kéo theo một bản sao của câu hỏi và các lựa chọn.
+  // Bỏ cả khối sao chép, kể cả khi có dòng trắng ở giữa.
   if(/^image\s*:/i.test(line)){
-   const v=line.replace(/^image\s*:\s*/i,"").trim();
-   if(q.length||opts.length)image=v;
-   else if(last){last.image=v;if(norm(v)===norm(last.question)){skipImage=true;imageStarted=false;}}
+   const value=line.replace(/^image\s*:\s*/i,"").trim();
+   if(q.length||opts.length){
+    image=value;
+    skipImageBlock=false;
+    imageStarted=false;
+   }else{
+    if(last)last.image=value;
+    skipImageBlock=true;
+    imageStarted=false;
+   }
    continue;
   }
-  if(skipImage){
-   if(!imageStarted&&last&&norm(line)===norm(last.question)){imageStarted=true;continue;}
-   if(op.test(line)){imageStarted=true;continue;}
-   if(imageStarted)continue;
-   skipImage=false;
+
+  if(skipImageBlock){
+   if(!imageStarted&&last&&norm(line)===norm(last.question)){
+    imageStarted=true;
+    continue;
+   }
+   const imageOption=line.match(optionPattern);
+   if(imageOption){
+    imageStarted=true;
+    continue;
+   }
+   const imageAnswer=getAnswer(line);
+   if(imageStarted&&imageAnswer)continue;
+   // Dòng không thuộc bản sao Image là câu hỏi kế tiếp.
+   skipImageBlock=false;
+   imageStarted=false;
   }
+
   const numbered=/^\s*(?:(?:question|q)\s*)?\d{1,4}\s*[.)、:-]\s*\S/i.test(rawLine);
   if(numbered&&(q.length||opts.length))finish();
-  const o=line.match(op),m=line.match(ans);
-  if(m&&opts.length>=2&&q.length){answer=[...new Set(m[1].toUpperCase().match(/[A-E]/g)||[])].join("");if(m[2])notes.push(m[2].trim());finish();continue;}
-  if(o){opts.push({key:o[1].toUpperCase(),text:o[2].trim()});active=opts.length-1;continue;}
-  if(/^\(.*\)$/.test(line)&&opts.length){notes.push(line);continue;}
-  if(opts.length&&active>=0)opts[active].text+=(opts[active].text?" ":"")+line;
-  else q.push(clean(line));
+
+  const option=line.match(optionPattern);
+  const answerData=getAnswer(line);
+
+  if(answerData&&opts.length>=2&&q.length){
+   answer=answerData.answer;
+   if(answerData.note)notes.push(answerData.note.trim());
+   finish();
+   continue;
+  }
+
+  if(option&&q.length){
+   const key=option[1].toUpperCase();
+   const value=option[2].trim();
+   const existingIndex=opts.findIndex(x=>x.key===key);
+   if(existingIndex>=0){
+    // Tránh tạo lựa chọn trùng chữ cái do nội dung nguồn lặp.
+    if(norm(opts[existingIndex].text)!==norm(value)){
+     opts[existingIndex].text+=(opts[existingIndex].text?" ":"")+value;
+    }
+    active=existingIndex;
+   }else{
+    opts.push({key,text:value});
+    active=opts.length-1;
+   }
+   continue;
+  }
+
+  if(/^\(.*\)$/.test(line)&&opts.length){
+   notes.push(line);
+   continue;
+  }
+
+  // Chú thích đặt ngay sau dòng đáp án thuộc câu vừa hoàn tất.
+  if(!q.length&&!opts.length&&last&&/^\(.*\)$/.test(line)){
+   last.notes=[last.notes,line].filter(Boolean).join(" ");
+   continue;
+  }
+
+  // Nối dòng bị xuống hàng vào lựa chọn gần nhất hoặc câu hỏi.
+  if(opts.length&&active>=0){
+   opts[active].text+=(opts[active].text?" ":"")+line;
+  }else{
+   q.push(clean(line));
+  }
  }
+
  finish();
  return result.filter(x=>x.question||x.options.length);
 }
@@ -61,7 +144,7 @@ document.querySelectorAll(".course").forEach(b=>b.onclick=()=>{course=b.dataset.
 document.querySelectorAll("[data-import]").forEach(b=>b.onclick=()=>{importCourse=b.dataset.import;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));$("import-course").textContent="· "+importCourse;$("raw").value="";$("preview-panel").classList.add("hidden")});
 document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>start(b.dataset.mode));
 $("preview").onclick=showPreview;$("close-preview").onclick=()=>$("preview-panel").classList.add("hidden");$("save").onclick=()=>{let valid=preview.filter(q=>q.valid),known=new Set(db[importCourse].map(q=>q.question.trim().toLowerCase())),fresh=valid.filter(q=>!known.has(q.question.trim().toLowerCase())).map(q=>({...q,id:crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random())}));db[importCourse].push(...fresh);save();render();$("raw").value="";$("preview-panel").classList.add("hidden");toast("Đã lưu "+fresh.length+" câu vào "+importCourse)};
-$("format").onclick=()=>alert("Không cần đánh số câu hỏi. Mỗi câu gồm nội dung, lựa chọn A. đến E. và đáp án ở một dòng riêng (A, B, AB, A B hoặc Answer: A). Có thể xuống dòng trong câu hỏi và lựa chọn. Các dòng star filled và sound sẽ tự bỏ qua.");
+$("format").onclick=()=>alert("Có thể nhập câu không đánh số. Lựa chọn hỗ trợ A., A), A:, A-, A, hoặc A + dấu cách; chấp nhận A–F. Đáp án đặt riêng một dòng: A, AB, A B, ACD hoặc Answer: A. Dòng xuống hàng trong câu hỏi/lựa chọn được nối lại. Khối Image bị lặp sẽ được bỏ qua.");
 $("clear").onclick=()=>{if(!db[course].length)return toast("Ngân hàng đang trống.");if(confirm("Xóa toàn bộ câu hỏi và tiến độ của "+course+"?")){db[course]=[];db.progress[course]={};save();render();toast("Đã xóa dữ liệu "+course)}};
 $("bank-list").onclick=e=>{let b=e.target.closest("[data-del]");if(!b)return;let i=+b.dataset.del;if(confirm("Xóa câu hỏi này?")){let q=db[course].splice(i,1)[0];delete db.progress[course][q.id];save();render()}};
 $("exit").onclick=()=>$("study").classList.add("hidden");render();
