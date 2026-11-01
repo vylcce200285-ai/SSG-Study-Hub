@@ -7,7 +7,7 @@ function save(){localStorage.setItem(KEY,JSON.stringify(db))}
 function toast(s){$("toast").textContent=s;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2200)}
 function render(){let qs=db[course],p=db.progress[course],studied=Object.values(p).filter(x=>x.attempts).length,wrong=Object.values(p).filter(x=>x.wrong).length,pc=qs.length?Math.round(studied/qs.length*100):0;$("course-title").textContent=course;$("total").textContent=qs.length;$("studied").textContent=studied;$("wrong").textContent=wrong;$("percent").textContent=pc+"%";$("bar").style.width=pc+"%";$("progress-caption").textContent=qs.length?studied+" / "+qs.length+" câu đã luyện":"Bắt đầu học để ghi nhận tiến độ";$("count104").textContent=db.SSG104.length;$("count105").textContent=db.SSG105.length;$("n104").textContent=db.SSG104.length+" câu";$("n105").textContent=db.SSG105.length+" câu";$("bank-course").textContent=course;$("empty").classList.toggle("hidden",!!qs.length);$("bank-list").innerHTML=qs.map((q,i)=>`<div class="bank-row"><div><b>Câu ${i+1}. ${esc(q.question.slice(0,120))}</b><small>${q.options.length} lựa chọn · Đáp án: ${esc(q.answer)}</small></div><button data-del="${i}">×</button></div>`).join("");$("bank-list").classList.toggle("hidden",!qs.length)}
 function parse(raw){
- const lines=raw.replace(/\r/g,"").split("\n"),result=[];
+ const lines=raw.replace(/\r/g,"").split("\n").map(line=>line.replace(/\\+\s*$/, "")),result=[];
  let q=[],opts=[],answer="",notes=[],image="",active=-1,last=null;
  let skipImage=false,imageStarted=false;
  const clean=x=>x.replace(/^(?:(?:question|q)\s*)?\d{1,4}\s*[.)、:-]\s*/i,"").trim();
