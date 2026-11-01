@@ -6,8 +6,52 @@ const $=id=>document.getElementById(id),esc=s=>String(s??"").replace(/[&<>"']/g,
 function save(){localStorage.setItem(KEY,JSON.stringify(db))}
 function toast(s){$("toast").textContent=s;$("toast").classList.add("show");setTimeout(()=>$("toast").classList.remove("show"),2200)}
 function render(){let qs=db[course],p=db.progress[course],studied=Object.values(p).filter(x=>x.attempts).length,wrong=Object.values(p).filter(x=>x.wrong).length,pc=qs.length?Math.round(studied/qs.length*100):0;$("course-title").textContent=course;$("total").textContent=qs.length;$("studied").textContent=studied;$("wrong").textContent=wrong;$("percent").textContent=pc+"%";$("bar").style.width=pc+"%";$("progress-caption").textContent=qs.length?studied+" / "+qs.length+" câu đã luyện":"Bắt đầu học để ghi nhận tiến độ";$("count104").textContent=db.SSG104.length;$("count105").textContent=db.SSG105.length;$("n104").textContent=db.SSG104.length+" câu";$("n105").textContent=db.SSG105.length+" câu";$("bank-course").textContent=course;$("empty").classList.toggle("hidden",!!qs.length);$("bank-list").innerHTML=qs.map((q,i)=>`<div class="bank-row"><div><b>Câu ${i+1}. ${esc(q.question.slice(0,120))}</b><small>${q.options.length} lựa chọn · Đáp án: ${esc(q.answer)}</small></div><button data-del="${i}">×</button></div>`).join("");$("bank-list").classList.toggle("hidden",!qs.length)}
-function parseChunk(chunk){let lines=chunk.split(/\n/).map(x=>x.trim()).filter(Boolean),opts=[],q=[],answer="",notes=[],image="";let found=false;for(let line of lines){let o=line.match(/^([A-E])[).、:]\s*(.+)$/i);if(o){opts.push({key:o[1].toUpperCase(),text:o[2]});continue}let a=line.match(/^(?:correct\s*)?answer\s*[:：-]\s*([A-E]{1,5})\b\s*(.*)$/i)||line.match(/^([A-E]{1,5})\s*(?:\((.*)\))?$/i);if(a&&opts.length){answer=[...new Set(a[1].toUpperCase())].join("");found=true;if(a[2])notes.push(a[2]);continue}if(/^image\s*:/i.test(line)){image=line.replace(/^image\s*:\s*/i,"");continue}if(found){notes.push(line);continue}if(/^\(.*\)$/.test(line)&&opts.length){notes.push(line);continue}q.push(line.replace(/^(?:(?:question|q)\s*)?\d{1,4}\s*[.)、:-]\s*/i,""))}let keys=opts.map(o=>o.key),valid=!!q.length&&opts.length>=2&&found&&[...answer].every(k=>keys.includes(k));return{question:q.join("\n"),options:opts,answer,notes:notes.join(" "),image,valid,issue:!q.length?"Thiếu câu hỏi":opts.length<2?"Thiếu lựa chọn":!found?"Chưa nhận diện đáp án": "Đáp án không khớp lựa chọn"}}
-function parse(raw){let lines=raw.replace(/\r/g,"").split("\n"),starts=[];lines.forEach((l,i)=>{if(/^\s*(?:(?:question|q)\s*)?\d{1,4}\s*[.)、:-]\s*\S/i.test(l))starts.push(i)});let chunks=[];if(starts.length){if(starts[0]>0&&lines.slice(0,starts[0]).join("").trim())chunks.push(lines.slice(0,starts[0]).join("\n"));starts.forEach((s,i)=>chunks.push(lines.slice(s,starts[i+1]??lines.length).join("\n")))}else chunks=raw.split(/\n\s*\n/).filter(x=>x.trim());return chunks.map(parseChunk).filter(q=>q.question||q.options.length)}
+function parse(raw){
+ const lines=raw.replace(/\r/g,"").split("\n"),result=[];
+ let q=[],opts=[],answer="",notes=[],image="",active=-1,last=null;
+ let skipImage=false,imageStarted=false;
+ const clean=x=>x.replace(/^(?:(?:question|q)\s*)?\d{1,4}\s*[.)、:-]\s*/i,"").trim();
+ const norm=x=>String(x||"").toLowerCase().replace(/[^\p{L}\p{N}]+/gu," ").trim();
+ const op=/^([A-E])[).、:]\s*(.*)$/i;
+ const ans=/^(?:(?:correct\s*)?answer\s*[:：-]\s*)?([A-E]+(?:[\s,;/&]+[A-E]+)*)\s*(?:\((.*)\))?$/i;
+
+ function finish(){
+  if(!q.length&&!opts.length)return;
+  const question=q.join(" ").replace(/\s+/g," ").trim();
+  const keys=opts.map(x=>x.key);
+  const valid=!!question&&opts.length>=2&&!!answer&&[...answer].every(k=>keys.includes(k));
+  const item={question,options:opts.map(x=>({...x})),answer,notes:notes.join(" "),image,valid,issue:!question?"Thiếu câu hỏi":opts.length<2?"Thiếu lựa chọn":!answer?"Chưa nhận diện đáp án":"Đáp án không khớp lựa chọn"};
+  result.push(item);last=item;q=[];opts=[];answer="";notes=[];image="";active=-1;
+ }
+
+ for(const rawLine of lines){
+  const line=rawLine.trim();
+  if(!line){if(skipImage&&imageStarted){skipImage=false;imageStarted=false;}continue;}
+  if(/^(?:star\s+filled|sound)$/i.test(line))continue;
+  if(/^image\s*:/i.test(line)){
+   const v=line.replace(/^image\s*:\s*/i,"").trim();
+   if(q.length||opts.length)image=v;
+   else if(last){last.image=v;if(norm(v)===norm(last.question)){skipImage=true;imageStarted=false;}}
+   continue;
+  }
+  if(skipImage){
+   if(!imageStarted&&last&&norm(line)===norm(last.question)){imageStarted=true;continue;}
+   if(op.test(line)){imageStarted=true;continue;}
+   if(imageStarted)continue;
+   skipImage=false;
+  }
+  const numbered=/^\s*(?:(?:question|q)\s*)?\d{1,4}\s*[.)、:-]\s*\S/i.test(rawLine);
+  if(numbered&&(q.length||opts.length))finish();
+  const o=line.match(op),m=line.match(ans);
+  if(m&&opts.length>=2&&q.length){answer=[...new Set(m[1].toUpperCase().match(/[A-E]/g)||[])].join("");if(m[2])notes.push(m[2].trim());finish();continue;}
+  if(o){opts.push({key:o[1].toUpperCase(),text:o[2].trim()});active=opts.length-1;continue;}
+  if(/^\(.*\)$/.test(line)&&opts.length){notes.push(line);continue;}
+  if(opts.length&&active>=0)opts[active].text+=(opts[active].text?" ":"")+line;
+  else q.push(clean(line));
+ }
+ finish();
+ return result.filter(x=>x.question||x.options.length);
+}
 function showPreview(){let raw=$("raw").value.trim();if(!raw)return toast("Bạn chưa dán câu hỏi.");preview=parse(raw);let good=preview.filter(q=>q.valid).length;$("preview-panel").classList.remove("hidden");$("summary").textContent=`Nhận diện ${preview.length} câu · ${good} câu hợp lệ`; $("warnings").textContent=good===preview.length?"Tất cả câu hỏi sẵn sàng để lưu.":"Câu lỗi sẽ không được lưu."; $("save").disabled=!good;$("save").textContent="Lưu vào "+importCourse;$("preview-list").innerHTML=preview.map((q,i)=>`<div class="preview-item ${q.valid?"":"bad"}"><b>${q.valid?"✓":"!"} Câu ${i+1}</b><p>${esc(q.question)}</p><small>${q.valid?"Đáp án: "+esc(q.answer)+" · "+q.options.length+" lựa chọn":esc(q.issue)}</small>${q.notes?`<p>Ghi chú: ${esc(q.notes)}</p>`:""}${q.image?`<p>Image note: ${esc(q.image)}</p>`:""}</div>`).join("")}
 function start(m){let all=db[course];if(!all.length)return toast("Hãy nhập câu hỏi cho "+course+" trước.");mode=m;items=m==="wrong"?all.filter(q=>db.progress[course][q.id]?.wrong):[...all];if(!items.length)return toast("Chưa có câu sai để ôn.");items.sort(()=>Math.random()-.5);at=0;chosen=[];done=false;$("study").classList.remove("hidden");$("study-label").textContent=course+" · "+(m==="flash"?"FLASHCARDS":m==="quiz"?"TRẮC NGHIỆM":"ÔN CÂU SAI");drawStudy()}
 function progress(q,correct){let p=db.progress[course],x=p[q.id]||{attempts:0,correct:0,wrong:false};x.attempts++;if(correct){x.correct++;x.wrong=false}else x.wrong=true;p[q.id]=x;save()}
@@ -17,7 +61,7 @@ document.querySelectorAll(".course").forEach(b=>b.onclick=()=>{course=b.dataset.
 document.querySelectorAll("[data-import]").forEach(b=>b.onclick=()=>{importCourse=b.dataset.import;document.querySelectorAll(".tab").forEach(x=>x.classList.toggle("active",x===b));$("import-course").textContent="· "+importCourse;$("raw").value="";$("preview-panel").classList.add("hidden")});
 document.querySelectorAll("[data-mode]").forEach(b=>b.onclick=()=>start(b.dataset.mode));
 $("preview").onclick=showPreview;$("close-preview").onclick=()=>$("preview-panel").classList.add("hidden");$("save").onclick=()=>{let valid=preview.filter(q=>q.valid),known=new Set(db[importCourse].map(q=>q.question.trim().toLowerCase())),fresh=valid.filter(q=>!known.has(q.question.trim().toLowerCase())).map(q=>({...q,id:crypto.randomUUID?crypto.randomUUID():String(Date.now()+Math.random())}));db[importCourse].push(...fresh);save();render();$("raw").value="";$("preview-panel").classList.add("hidden");toast("Đã lưu "+fresh.length+" câu vào "+importCourse)};
-$("format").onclick=()=>alert("Ví dụ:\n\n1. What is communication?\nA. Sharing information\nB. Staying silent\nC. Avoiding people\nD. Creating confusion\nA\n\n2. Which are non-verbal communication?\nA. Gestures\nB. Facial expressions\nC. Body language\nD. Email\nABC\n\nMỗi câu nên có số thứ tự. Ghi chú sau đáp án được giữ lại.");
+$("format").onclick=()=>alert("Không cần đánh số câu hỏi. Mỗi câu gồm nội dung, lựa chọn A. đến E. và đáp án ở một dòng riêng (A, B, AB, A B hoặc Answer: A). Có thể xuống dòng trong câu hỏi và lựa chọn. Các dòng star filled và sound sẽ tự bỏ qua.");
 $("clear").onclick=()=>{if(!db[course].length)return toast("Ngân hàng đang trống.");if(confirm("Xóa toàn bộ câu hỏi và tiến độ của "+course+"?")){db[course]=[];db.progress[course]={};save();render();toast("Đã xóa dữ liệu "+course)}};
 $("bank-list").onclick=e=>{let b=e.target.closest("[data-del]");if(!b)return;let i=+b.dataset.del;if(confirm("Xóa câu hỏi này?")){let q=db[course].splice(i,1)[0];delete db.progress[course][q.id];save();render()}};
 $("exit").onclick=()=>$("study").classList.add("hidden");render();
