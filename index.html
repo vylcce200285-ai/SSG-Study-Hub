@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#11101a"><title>SSG Study Hub</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="layout">
+<aside class="sidebar">
+  <a class="brand" href="#"><span class="logo">S</span><span><b>SSG Study Hub</b><small>PERSONAL STUDY SPACE</small></span></a>
+  <p class="side-title">MÔN HỌC</p>
+  <button class="course active" data-course="SSG104">● SSG104 <span id="count104">0</span></button>
+  <button class="course" data-course="SSG105">● SSG105 <span id="count105">0</span></button>
+  <div class="side-bottom">Học theo cách của bạn.<br><b>Tiến bộ từng ngày.</b></div>
+</aside>
+<main>
+<header><div><small>KHÔNG GIAN ÔN TẬP</small><h1 id="course-title">SSG104</h1></div><span class="saved">● Đã lưu trên thiết bị</span></header>
+<section class="welcome"><div><p>Chào mừng trở lại</p><h2>Hôm nay mình học gì?</h2><p>Chọn chế độ học hoặc thêm bộ câu hỏi của bạn.</p></div><div class="art"><b>SSG</b><span>STUDY<br>SMARTER</span></div></section>
+<section class="stats">
+  <article><small>TỔNG CÂU HỎI</small><strong id="total">0</strong><p>Trong môn đang chọn</p></article>
+  <article><small>ĐÃ ÔN TẬP</small><strong id="studied">0</strong><p>Câu đã trả lời</p></article>
+  <article><small>CÂU CẦN ÔN LẠI</small><strong id="wrong">0</strong><p>Trong danh sách câu sai</p></article>
+  <article><small>TIẾN ĐỘ HỌC</small><strong id="percent">0%</strong><div class="bar"><i id="bar"></i></div><p id="progress-caption">Bắt đầu học để ghi nhận tiến độ</p></article>
+</section>
+<section class="section">
+  <div class="heading"><div><small>BẮT ĐẦU HỌC</small><h2>Chọn chế độ</h2></div></div>
+  <div class="modes">
+    <button data-mode="flash"><i>▤</i><span><b>Flashcards</b><small>Học câu hỏi và ghi nhớ đáp án</small></span><em>↗</em></button>
+    <button data-mode="quiz"><i>✓</i><span><b>Trắc nghiệm</b><small>Làm bài và kiểm tra kết quả</small></span><em>↗</em></button>
+    <button data-mode="wrong"><i>↻</i><span><b>Ôn câu sai</b><small>Luyện lại những câu chưa đúng</small></span><em>↗</em></button>
+  </div>
+</section>
+<section class="section">
+  <div class="heading"><div><small>NGÂN HÀNG CÂU HỎI</small><h2>Thêm câu hỏi của bạn</h2><p>Chọn đúng môn trước khi dán. Hai ngân hàng được lưu riêng.</p></div><span class="local">LƯU TRÊN TRÌNH DUYỆT</span></div>
+  <div class="tabs"><button class="tab active" data-import="SSG104">Nhập SSG104 <small id="n104">0 câu</small></button><button class="tab" data-import="SSG105">Nhập SSG105 <small id="n105">0 câu</small></button></div>
+  <div class="panel"><label for="raw">DÁN NỘI DUNG CÂU HỎI <span id="import-course">· SSG104</span></label><textarea id="raw" placeholder="Dán câu hỏi, lựa chọn A–E và đáp án đúng vào đây..."></textarea>
+    <div class="hint"><span>Hỗ trợ đáp án đơn (A) và nhiều đáp án (ACD).</span><button id="format" class="link">Xem định dạng mẫu</button></div>
+    <div class="actions"><span id="message">Nội dung sẽ được phân tích trước khi lưu.</span><button id="preview" class="primary">Kiểm tra câu hỏi →</button></div>
+  </div>
+  <div id="preview-panel" class="panel preview hidden"><div class="preview-head"><b>Xem trước dữ liệu</b><button id="close-preview" class="link">Đóng</button></div><p id="summary"></p><div id="preview-list"></div><div class="actions"><span id="warnings"></span><button id="save" class="primary">Lưu vào SSG104</button></div></div>
+</section>
+<section class="section">
+  <div class="heading"><div><small>DỮ LIỆU ĐÃ LƯU</small><h2>Bộ câu hỏi <span id="bank-course">SSG104</span></h2></div><button id="clear" class="link danger">Xóa ngân hàng này</button></div>
+  <div id="empty" class="empty"><b>Chưa có câu hỏi nào</b><p>Chọn đúng môn và dán ngân hàng câu hỏi để bắt đầu.</p></div><div id="bank-list"></div>
+</section>
+<footer>SSG Study Hub · Dữ liệu học tập được lưu trong trình duyệt trên thiết bị này.</footer>
+</main>
+</div>
+<div id="study" class="overlay hidden"><div class="study-box"><div class="study-head"><button id="exit" class="link">← Quay lại</button><span id="study-label">SSG104</span><span id="position">1 / 1</span></div><div class="bar"><i id="study-bar"></i></div><div id="study-content"></div><div id="study-actions" class="study-actions"></div></div></div>
+<div id="toast" class="toast"></div><script src="app.js"></script>
+</body></html>
